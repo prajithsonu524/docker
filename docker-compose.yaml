@@ -1,0 +1,107 @@
+version: "3"
+services:
+  redis:
+    image: redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ../authserver-eval-4/database/data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  authmigration:
+
+    build:
+      context: ../authserver-eval-4
+      dockerfile: Dockerfile.migration
+    depends_on:
+      db:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: docker
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_HOST: db
+      POSTGRESQL_DB_NAME: postgres
+
+  authserver:
+
+    build:
+      context: ../authserver-eval-4
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: docker
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_HOST: db
+      POSTGRESQL_DB_NAME: postgres
+
+  cmsserver:
+
+    build:
+      context: ../BE-eval-4
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: docker
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_HOST: cmsdb
+      POSTGRESQL_DB_NAME: postgres
+
+  cmsdb:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - ../BE-eval-4/database/data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cmsmigration:
+
+    build:
+      context: ../BE-eval-4
+      dockerfile: Dockerfile.migration
+    depends_on:
+      cmsdb:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: docker
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_HOST: cmsdb
+      POSTGRESQL_DB_NAME: postgres
